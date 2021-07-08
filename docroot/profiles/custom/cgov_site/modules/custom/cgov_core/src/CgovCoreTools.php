@@ -6,7 +6,9 @@ use Drupal\Core\Access\AccessResult;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\EntityInterface;
 use Drupal\language\LanguageNegotiatorInterface;
+use Drupal\Core\Database\Connection;
 
 /**
  * Helper service for various cgov installation tasks.
@@ -14,6 +16,7 @@ use Drupal\language\LanguageNegotiatorInterface;
  * @package Drupal\cgov_core
  */
 class CgovCoreTools {
+
   const DEFAULT_ROLES = ['content_author', 'content_editor', 'advanced_editor'];
 
   const DEFAULT_PERMISSIONS = [
@@ -69,6 +72,13 @@ class CgovCoreTools {
   protected $entityTypeManager;
 
   /**
+   * The database connection.
+   *
+   * @var \Drupal\Core\Database\Connection
+   */
+  protected $connection;
+
+  /**
    * Our Language Negotiation settings.
    *
    * This would normally be in language.types.yml, but due to
@@ -119,16 +129,20 @@ class CgovCoreTools {
    *   The language negotiation methods manager.
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
    *   The entity type manager.
+   * @param \Drupal\Core\Database\Connection $connection
+   *   The Connection object.
    */
   public function __construct(
-      ConfigFactoryInterface $config_factory,
-      LanguageNegotiatorInterface $negotiator,
-      EntityTypeManagerInterface $entity_type_manager
-    ) {
+    ConfigFactoryInterface $config_factory,
+    LanguageNegotiatorInterface $negotiator,
+    EntityTypeManagerInterface $entity_type_manager,
+    Connection $connection
+  ) {
 
     $this->negotiator = $negotiator;
     $this->configFactory = $config_factory;
     $this->entityTypeManager = $entity_type_manager;
+    $this->connection = $connection;
   }
 
   /**
@@ -167,7 +181,8 @@ class CgovCoreTools {
    * See https://github.com/NCIOCPL/cgov-digital-platform/issues/127.
    */
   public function attachMediaTypeToWorkflow($type_name, $workflow_name) {
-    $workflows = $this->entityTypeManager->getStorage('workflow')->loadMultiple();
+    $workflows = $this->entityTypeManager->getStorage('workflow')
+      ->loadMultiple();
     $workflow = $workflows[$workflow_name];
     $workflow->getTypePlugin()->addEntityTypeAndBundle('media', $type_name);
     $workflow->save(TRUE);
@@ -179,9 +194,11 @@ class CgovCoreTools {
    * See https://github.com/NCIOCPL/cgov-digital-platform/issues/1732.
    */
   public function attachBlockContentTypeToWorkflow($type_name, $workflow_name) {
-    $workflows = $this->entityTypeManager->getStorage('workflow')->loadMultiple();
+    $workflows = $this->entityTypeManager->getStorage('workflow')
+      ->loadMultiple();
     $workflow = $workflows[$workflow_name];
-    $workflow->getTypePlugin()->addEntityTypeAndBundle('block_content', $type_name);
+    $workflow->getTypePlugin()
+      ->addEntityTypeAndBundle('block_content', $type_name);
     $workflow->save(TRUE);
   }
 
@@ -525,6 +542,37 @@ class CgovCoreTools {
    */
   public function getProdUrl() {
     return 'https://www.cancer.gov';
+  }
+
+  /**
+   * Returns an array of references to a specific target.
+   *
+   * @param \Drupal\cgov_core\EntityInterface $entity
+   *   The taxonomy entity.
+   * @param array $tax_reference_fields
+   *   The fields to search within.
+   * @param string $entity_table
+   *   The entity prefix to search.
+   *
+   * @return mixed
+   *   The array of references to the term.
+   */
+  public function getTermRefsFromField(EntityInterface $entity, array $tax_reference_fields, $entity_table = "node") {
+
+    $references = [];
+    foreach ($tax_reference_fields as $field) {
+      // Query the entity field for references to this term.
+      $query = $this->connection
+        ->select($entity_table . '__' . $field, 'e');
+      $query->addField('e', 'entity_id');
+      $query->condition('e.' . $field . '_target_id', $entity->id);
+      $result = $query->execute();
+      $result_fields = $result->fetchAll();
+      foreach ($result_fields as $ref) {
+        $references[] = $ref->entity_id;
+      }
+    }
+    return $references;
   }
 
 }

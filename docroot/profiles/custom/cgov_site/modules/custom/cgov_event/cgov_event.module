@@ -4,3 +4,29 @@
  * @file
  * Contains cgov_event.module.
  */
+
+use Drupal\Core\Access\AccessResult;
+use Drupal\cgov_core\CgovCoreTools;
+
+/**
+ * Implements hook_entity_type_access().
+ */
+function cgov_event_taxonomy_term_access($entity, $operation, $account) {
+  // Prevent term deletion if used in default revision.
+  if ($entity->bundle() === 'cgov_event_series' || $entity->bundle() === 'cgov_event_venue') {
+    switch ($operation) {
+      case 'delete':
+        $references = CgovCoreTools::getTermRefsFromField($entity, ['field_event_series']);
+        if (count($references) > 0) {
+          $reason = 'Unable to delete term. It is used in the following references: ';
+          return AccessResult::forbidden($reason);
+        }
+        break;
+
+      // Let other modules weigh in if we haven't vetoed the operation.
+      default:
+        return AccessResult::neutral();
+    }
+  }
+  return AccessResult::neutral();
+}

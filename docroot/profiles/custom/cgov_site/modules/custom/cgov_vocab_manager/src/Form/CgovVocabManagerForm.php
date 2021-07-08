@@ -343,6 +343,7 @@ class CgovVocabManagerForm extends FormBase {
         'term' => $this->t('Name'),
         'children' => $this->t('Children'),
         'operations' => $this->t('Operations'),
+        'usage' => $this->t('Usage'),
         'weight' => $update_tree_access->isAllowed() ? $this->t('Weight') : NULL,
       ],
       '#attributes' => [
@@ -356,6 +357,7 @@ class CgovVocabManagerForm extends FormBase {
         'term' => [],
         'children' => [],
         'operations' => [],
+        'usage' => [],
         'weight' => $update_tree_access->isAllowed() ? [] : NULL,
       ];
       /** @var $term \Drupal\Core\Entity\EntityInterface */
@@ -437,6 +439,46 @@ class CgovVocabManagerForm extends FormBase {
           '#links' => $operations,
         ];
       }
+
+      // Get usages for this term.
+      $references = get_deletable_and_term_refs($term);
+      $ref_markup = '';
+      $prefixes = \Drupal::config('language.negotiation')->get('url.prefixes');
+
+      // Capture the node references.
+      if (count($references['node_refs']) > 0) {
+        $ref_markup .= "<p>Node:</p>" ;
+        foreach ($references['node_refs'] as $node) {
+
+          // Generate the edit link, taking language into account.
+          $prefix = $prefixes[$node['langcode']];
+          $url = "/${prefix}/node/${node['entity_id']}/edit";
+          $url = preg_replace('~/+~', '/', $url);
+          $link = "<a href='${url}'>${url}</a>";
+
+          $ref_markup .= "${link}<br/>";
+        }
+      }
+
+      /// Capture the media references
+      if (count($references['media_refs']) > 0) {
+        $ref_markup .="<p>Media: </p>" . '<br/>';
+        foreach ($references['media_refs'] as $media) {
+
+          // Generate the edit link, taking language into account.
+          $prefix = $prefixes[$node['langcode']];
+          $url = "/${prefix}/media/${media['entity_id']}/edit";
+          $url = preg_replace('/([^:])(\/{2,})/', '$1/', $url);
+          $link = "<a href='${url}'>${url}</a>";
+
+          $ref_markup .= "${link}<br/>";
+        }
+      }
+
+      // Add the usage list to the form.
+      $form['terms'][$key]['usage'] = [
+        '#markup' => $ref_markup,
+      ];
 
       if ($parent_fields) {
         $form['terms'][$key]['#attributes']['class'][] = 'draggable';

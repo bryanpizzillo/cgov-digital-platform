@@ -12,6 +12,7 @@ use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Url;
 use Drupal\taxonomy\Entity\Term;
 use Drupal\Core\Cache\Cache;
+use Drupal\Core\Access\AccessResult;
 
 /**
  * Implements hook_entity_field_storage_info().
@@ -330,17 +331,23 @@ function _will_trigger_cache_tag_invalidation(EntityInterface $updated_entity) {
   // Invalidation check for Nodes.
   if ($entityType === 'node') {
     // Exit early if this entity doesn't have site sections.
-    if (!$updated_entity->hasField('field_site_section')|| empty($updated_entity->get('field_site_section')->first())) {
+    if (!$updated_entity->hasField('field_site_section') || empty($updated_entity->get('field_site_section')
+      ->first())) {
       return FALSE;
     }
 
     // Get the language alias prefix.
-    $default_langcode = \Drupal::languageManager()->getDefaultLanguage()->getId();
-    $current_langcode = \Drupal::languageManager()->getCurrentLanguage()->getId();
+    $default_langcode = \Drupal::languageManager()
+      ->getDefaultLanguage()
+      ->getId();
+    $current_langcode = \Drupal::languageManager()
+      ->getCurrentLanguage()
+      ->getId();
     $prefix = '';
 
     if ($current_langcode != $default_langcode) {
-      $all_prefixes = \Drupal::config('language.negotiation')->get('url.prefixes');
+      $all_prefixes = \Drupal::config('language.negotiation')
+        ->get('url.prefixes');
       $prefix = '/' . $all_prefixes[$current_langcode];
     }
 
@@ -439,7 +446,8 @@ function entity_fields_modified(array $fields, EntityInterface $entity) {
     return (int) $original->get($field_name)->target_id !== (int) $entity->get($field_name)->target_id;
   };
   $get_value = function ($field_name) use ($entity, $original) {
-    return $original->get($field_name)->getValue() != $entity->get($field_name)->getValue();
+    return $original->get($field_name)->getValue() != $entity->get($field_name)
+      ->getValue();
   };
 
   // Loop though the given fields to check for modification.
@@ -733,4 +741,147 @@ function cgov_site_section_link_alter(&$variables) {
       }
     }
   }
+}
+
+/**
+ * Implements hook_entity_type_access().
+ */
+function cgov_site_section_taxonomy_term_access(EntityInterface $entity, $operation, $account) {
+  // Limit this to Site Sections.
+  if ($entity->bundle() === 'cgov_site_sections') {
+    switch ($operation) {
+
+      case 'delete':
+        $reason = 'Users not allowed to delete taxonomy items ';
+
+        // Check to see if this section and it's children are
+        // deletable based of business logic.
+        $reference_check = recursive_check($entity);
+        if (!$reference_check['is_deletable']) {
+          $reason = $reference_check['reason'];
+          return AccessResult::forbidden($reason);
+        }
+        break;
+
+      // Let other modules weigh in if we haven't vetoed the operation.
+      default:
+        return AccessResult::neutral();
+    }
+  }
+  return AccessResult::neutral();
+}
+
+/**
+ * Determine if a section is deletable. Return any content references to it.
+ *
+ * @param \Drupal\Core\Entity\EntityInterface $entity
+ *   The site section entity.
+ *
+ * @return array
+ *   The result array.
+ */
+function get_deletable_and_term_refs(EntityInterface $entity) {
+  $is_deletable = TRUE;
+  $node_references = [];
+  $media_references = [];
+  $reason = '';
+
+  // If the item is used in the default node it is not deletable.
+  $query = \Drupal::database()
+    ->select('node__field_site_section', 's');
+  $query->condition('s.field_site_section_target_id', $entity->id());
+  $query->addField('s', 'entity_id');
+  $query->addField('s', 'langcode');
+  $result = $query->execute();
+  $result_fields = $result->fetchAll();
+
+  // Keep track of the node references.
+  foreach ($result_fields as $ref) {
+    $node_references[] = [
+      'entity_id' => $ref->entity_id,
+      'langcode' => $ref->langcode,
+    ];
+  }
+
+  // If the item is used in the default media revision it is not deletable.
+  $query = \Drupal::database()
+    ->select('media__field_site_section', 's');
+  $query->condition('s.field_site_section_target_id', $entity->id());
+  $query->addField('s', 'entity_id');
+  $query->addField('s', 'langcode');
+  $result = $query->execute();
+  $result_fields = $result->fetchAll();
+
+  // Keep track of the media references.
+  foreach ($result_fields as $ref) {
+    $media_references[] = [
+      'entity_id' => $ref->entity_id,
+      'langcode' => $ref->langcode,
+    ];
+  }
+
+  $num_results = count($node_references) + count($media_references);
+  if ($num_results > 0) {
+    $is_deletable = FALSE;
+
+    $reason = 'The section ' . $entity->id() . ' cannot be deleted. It is in usage on the following:' . PHP_EOL;
+    foreach ($node_references as $ref) {
+      $reason .= 'Node: ' . $ref['entity_id'] . ' Language ' . $ref['langcode'] . PHP_EOL;
+    }
+    foreach ($media_references as $ref) {
+      $reason .= 'Media: ' . $ref['entity_id'] . ' Language ' . $ref['langcode'] . PHP_EOL;
+    }
+  }
+
+  // If the item has a landing page set, it is not deletable.
+  $landing_page = $entity->field_landing_page->target_id;
+  if ($landing_page != NULL) {
+    $reason .= 'The section can\'t be deleted, ' . $entity->id() .
+        ' has a reference to a landing page and it must first be removed.';
+    $is_deletable = FALSE;
+  }
+
+  // Return an array with the flag / references if they exist.
+  $result = [
+    'is_deletable' => $is_deletable,
+    'node_refs' => $node_references,
+    'media_refs' => $media_references,
+    'reason' => $reason,
+  ];
+
+  return $result;
+}
+
+/**
+ * Recurse over a term and its children to see if all sections are deletable.
+ *
+ * @param \Drupal\Core\Entity\EntityInterface $section
+ *   The parent term to start with.
+ *
+ * @return array
+ *   An array containing the is_deletable flag and any references.
+ */
+function recursive_check(EntityInterface $section) {
+  // Check if the first is deletable.
+  $result = get_deletable_and_term_refs($section);
+
+  // If it's not deletable exit early.
+  if (!$result['is_deletable']) {
+    return $result;
+  }
+  // Load the children.
+  $vid = 'cgov_site_sections';
+  $depth = 1;
+  $load_entities = TRUE;
+  $children = \Drupal::entityTypeManager()
+    ->getStorage('taxonomy_term')
+    ->loadTree($vid, $section->id(), $depth, $load_entities);
+
+  foreach ($children as $child) {
+    $child_result = recursive_check($child);
+    if (!$child_result['is_deletable']) {
+      break;
+    }
+  }
+  return $result;
 }

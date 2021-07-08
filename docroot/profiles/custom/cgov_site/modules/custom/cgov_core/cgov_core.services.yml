@@ -11,6 +11,7 @@ services:
       - '@config.factory'
       - '@language_negotiator'
       - '@entity_type.manager'
+      - '@database'
   # Defines a form service of which alters functionality and display of Cgov forms
   cgov_core.form_tools:
     class: Drupal\cgov_core\CgovFormTools

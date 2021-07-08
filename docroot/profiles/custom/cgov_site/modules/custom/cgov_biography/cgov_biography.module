@@ -4,3 +4,29 @@
  * @file
  * Contains cgov_biography.module.
  */
+
+use Drupal\Core\Access\AccessResult;
+use Drupal\cgov_core\CgovCoreTools;
+
+/**
+ * Implements hook_entity_type_access().
+ */
+function cgov_biography_taxonomy_term_access($entity, $operation, $account) {
+  // Prevent term deletion if used in default revision.
+  if ($entity->bundle() === 'cgov_biography_campuses') {
+    switch ($operation) {
+      case 'delete':
+        $references = CgovCoreTools::getTermRefsFromField($entity, ['field_campus']);
+        if (count($references) > 0) {
+          $reason = 'Unable to delete term. It is used in the following references: ';
+          return AccessResult::forbidden($reason);
+        }
+        break;
+
+      // Let other modules weigh in if we haven't vetoed the operation.
+      default:
+        return AccessResult::neutral();
+    }
+  }
+  return AccessResult::neutral();
+}
