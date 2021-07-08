@@ -118,7 +118,12 @@ function _cgov_image_filter_view_image(
   }
 
   // Only certain image types will have overrides.
-  if (in_array($img_type, ['featured', 'panoramic', 'social_media', 'thumbnail'])) {
+  if (in_array($img_type, [
+    'featured',
+    'panoramic',
+    'social_media',
+    'thumbnail',
+  ])) {
 
     $override_field_name = 'field_override_img_' . $img_type;
     $override_field = $entity->get($override_field_name);
