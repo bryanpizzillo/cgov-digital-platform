@@ -85,7 +85,7 @@ At some point in time there will be multiple websites within our project. (e.g. 
   * MariaDB
 * web
   * OS: Ubuntu Bionic
-  * PHP 7.2
+  * PHP 7.4
     * bz2
     * cli
     * common
