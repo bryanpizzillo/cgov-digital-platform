@@ -27,25 +27,25 @@ RUN DEBIAN_FRONTEND=noninteractive \
     apt-get install -yq \
     apache2 \
     build-essential \
-    php7.3 \
-    libapache2-mod-php7.3 \
-    php7.3-bz2 \
-    php7.3-cli \
-    php7.3-common \
-    php7.3-curl \
-    php7.3-fpm \
-    php7.3-gd \
-    php7.3-json \
-    php7.3-mbstring \
-    php7.3-memcached \
-    php7.3-mysql \
-    php7.3-oauth \
-    php7.3-opcache \
-    php7.3-readline \
-    php7.3-sqlite3 \
-    php7.3-soap \
-    php7.3-xdebug \
-    php7.3-xml \
+    php7.4 \
+    libapache2-mod-php7.4 \
+    php7.4-bz2 \
+    php7.4-cli \
+    php7.4-common \
+    php7.4-curl \
+    php7.4-fpm \
+    php7.4-gd \
+    php7.4-json \
+    php7.4-mbstring \
+    php7.4-memcached \
+    php7.4-mysql \
+    php7.4-oauth \
+    php7.4-opcache \
+    php7.4-readline \
+    php7.4-sqlite3 \
+    php7.4-soap \
+    php7.4-xdebug \
+    php7.4-xml \
     mariadb-client \
     curl \
     git \
@@ -75,14 +75,6 @@ RUN CD_VERSION=2.44 && echo "Using chromedriver version: "$CD_VERSION \
   && chmod 755 /opt/selenium/chromedriver-latest \
   && ln -fs /opt/selenium/chromedriver-latest /usr/bin/chromedriver
 
-
-# Replace configuration files with our own.
-## We will be mounting these in the composer so that
-## we don't have to rebuild to update config changes.
-#COPY apache2.conf /etc/apache2/apache2.conf
-#COPY php_apache2.ini /etc/php/7.2/apache2/php.ini
-#COPY php_cli.ini /etc/php/7.2/cli/php.ini
-
 # Copy up the available sites config. The startup script
 # manipulates this file based on env vars.
 COPY ./build/000-default.conf /etc/apache2/sites-available/000-default.conf
@@ -90,7 +82,7 @@ COPY ./build/000-default.conf /etc/apache2/sites-available/000-default.conf
 ## These are the PHP modules that are available to be
 ## loaded by the CLI & apache. This should be inline with
 ## the modules installed above.
-COPY ./build/php-conf /etc/php/7.3/mods-available
+COPY ./build/php-conf /etc/php/7.4/mods-available
 
 # Enable mod_rewrite 'cause we needs it.
 RUN a2enmod rewrite

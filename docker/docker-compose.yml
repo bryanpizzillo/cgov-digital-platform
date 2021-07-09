@@ -13,8 +13,8 @@ services:
       - ../:/var/www:cached
       ## Configs
       - ./web/runtime/apache2.conf:/etc/apache2/apache2.conf
-      - ./web/runtime/php_apache2.ini:/etc/php/7.2/apache2/php.ini
-      - ./web/runtime/php_cli.ini:/etc/php/7.2/cli/php.ini
+      - ./web/runtime/php_apache2.ini:/etc/php/7.4/apache2/php.ini
+      - ./web/runtime/php_cli.ini:/etc/php/7.4/cli/php.ini
       ## Block git repo management within the container
       - ./web/runtime/container-hooks:/var/www/scripts/hooks
     env_file:
