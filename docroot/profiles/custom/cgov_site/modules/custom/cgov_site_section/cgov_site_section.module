@@ -12,6 +12,7 @@ use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Url;
 use Drupal\taxonomy\Entity\Term;
 use Drupal\Core\Cache\Cache;
+use Drupal\Core\Form\FormStateInterface;
 
 /**
  * Implements hook_entity_field_storage_info().
@@ -35,6 +36,43 @@ function cgov_site_section_entity_bundle_field_info(EntityTypeInterface $entity_
     $custom_bundle_field_storage = cgov_site_section_entity_field_storage_info($entity_type)['computed_path'];
     $definitions[$custom_bundle_field_storage->getName()] = FieldDefinition::createFromFieldStorageDefinition($custom_bundle_field_storage);
     return $definitions;
+  }
+}
+
+/**
+ * Implements term_cgov_site_sections_parent_validate(), validate default root as parent.
+ */
+function term_cgov_site_sections_parent_validate(&$form, \Drupal\Core\Form\FormStateInterface $form_state) {
+   $langcode =  $form_state->getValue('langcode');
+   $tid =  $form_state->getValue('tid');
+   $vid = 'cgov_site_sections';
+    $terms =\Drupal::entityTypeManager()->getStorage('taxonomy_term')->loadTree($vid);
+    $enParentTermCount = $esParentTermCount = 0;
+    foreach ($terms as $term) {
+      if($term->depth == 0 && $term->langcode == 'en' && $tid != $term->tid) {
+        $enParentTermCount++;
+      }
+      if($term->depth == 0 && $term->langcode == 'es' && $tid != $term->tid) {
+        $esParentTermCount++;
+      }
+    }
+
+    $entity = $form_state->getFormObject()->getEntity();
+    $parent =  $form_state->getValue('parent');
+   if(in_array(0, $parent)) {
+       if(($enParentTermCount >= 1 && $langcode[0]['value'] == 'en') || ($esParentTermCount >= 1 && $langcode[0]['value'] == 'es')) {
+          $form_state->setErrorByName('parent', t('The site section cannot be saved. Please set the parent site section under the Relations tab.'));
+       }
+
+}
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function cgov_site_section_form_alter(&$form, FormStateInterface &$form_state, $form_id) {
+  if($form_id == 'taxonomy_term_cgov_site_sections_form') {
+      $form['#validate'][] = 'term_cgov_site_sections_parent_validate';
   }
 }
 
